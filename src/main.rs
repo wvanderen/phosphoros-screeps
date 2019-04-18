@@ -5,12 +5,38 @@ extern crate log;
 extern crate screeps;
 #[macro_use]
 extern crate stdweb;
+extern crate typetag;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
 
 mod logging;
 
 use std::collections::HashSet;
 
 use screeps::{find, prelude::*, Part, ReturnCode, RoomObjectProperties};
+
+#[typetag::serde]
+trait TypeTagTest {
+    fn five(&self) -> u32;
+}
+
+#[typetag::serde]
+impl TypeTagTest for u32 {
+    fn five(&self) -> u32 {
+        *self
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Helllo(u32);
+
+#[typetag::serde]
+impl TypeTagTest for Helllo {
+    fn five(&self) -> u32 {
+        self.0 + 20
+    }
+}
 
 fn main() {
     stdweb::initialize();
@@ -32,10 +58,7 @@ fn main() {
                 console_error("resetting VM next tick.");
                 // reset the VM since we don't know if everything was cleaned up and don't
                 // want an inconsistent state.
-                module.exports.loop = function() {
-                    __initialize(new WebAssembly.Module(require("compiled")), false);
-                    module.exports.loop();
-                }
+                module.exports.loop = wasm_initialize;
             }
         }
     }
@@ -43,6 +66,20 @@ fn main() {
 
 fn game_loop() {
     debug!("loop starting! CPU: {}", screeps::game::cpu::get_used());
+
+    let henlo = Box::new(Helllo(111)) as Box<TypeTagTest>;
+    info!("henlo five: {}", henlo.five());
+    let sj = serde_json::to_string(&henlo).unwrap();
+    info!("henlo sj: {:?}", sj);
+    let deser: Box<TypeTagTest> = serde_json::from_str(&sj).unwrap();
+    info!("henlo deser five: {}", deser.five());
+    let plain = Box::new(50u32) as Box<TypeTagTest>;
+    info!("plain five: {}", plain.five());
+    let sj = serde_json::to_string(&plain).unwrap();
+    info!("plain sj: {:?}", sj);
+    let deser: Box<TypeTagTest> = serde_json::from_str(&sj).unwrap();
+    info!("plain deser five: {}", deser.five());
+
 
     debug!("running spawns");
     for spawn in screeps::game::spawns::values() {
